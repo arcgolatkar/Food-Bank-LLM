@@ -40,3 +40,9 @@ print(unique_addresses)
 
 
 # LLM call to analyse which of the top 10 are most elegible
+llm2_output = get_completion(open_ai_api_key, 
+                             prompt=summary_llm_prompt(input_sentence, llm1_output),
+                             model="gpt-3.5-turbo",
+                             temperature=0.7
+                             )['choices'][0]['message']['content']
+print(llm2_output)

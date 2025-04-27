@@ -48,3 +48,7 @@ string for it
 {input_sentence}
 
 '''
+
+
+def summary_llm_prompt(input_sentence):
+    return f''' '''
