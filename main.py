@@ -28,15 +28,33 @@ print(llm1_output)
 
 
 
+
 # logger : llm2 call for sql generation
-df = pd.load_csv('CAFB_Shopping_Partners_Data.csv')
+df = pd.load_csv('data.csv')
 filtered_df = df[(df['Region'] == llm1_output['region']) & (df['County'] == llm1_output['county'])]
-unique_addresses = filtered_df['Address'].unique()
-print(unique_addresses)
 
 
-# jeolat to find top 10 nearest locations
-#top_5_nearest = nearest_finder(input, surrounding_places)
+
+
+
+
+
+# convert address to (lat, long)
+lat, lon = lat_lon_finder(llm1_output['address'])
+
+# find distance of this user with food centers
+all_distances = dist_cal(lat, lon, filtered_df)
+
+# find top 10 nearest locations
+nearest_neighbours = []
+for dist, display_addr in all_distances:
+    nearest_neighbours.append((dist, display_addr))
+    if len(nearest_neighbours) >= 10:
+        break
+
+
+
+
 
 
 # LLM call to analyse which of the top 10 are most elegible
