@@ -2,3 +2,5 @@
 
 open_ai_api_key = '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'
 
+open_ai_api_key_2 = 'WMKFm4PJEzKtFZlPBeoCopHHPxrPC5rcdWPfwAalF1lEj3f9mfl8MUQ3ZzUfi8hUFdXbw9dNsoT3BlbkFJZK5TNyx'
+

@@ -18,7 +18,7 @@ I live near Ward 5 Mary House 4303 13th st NE Washington DC 20017
 
 
 # logger : llm1 call for feature extracton
-llm1_output = get_completion(open_ai_api_key, 
+llm1_output = get_completion(open_ai_api_key_2, 
                              prompt=extractor_llm_prompt(input_sentence),
                              model="gpt-3.5-turbo",
                              temperature=0.7
