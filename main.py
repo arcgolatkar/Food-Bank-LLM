@@ -1,16 +1,21 @@
 from flask import Flask, request, jsonify
 import os
 import logging
-import pandas as pd
 
 from open_ai_helpers import *
 from helper import lat_lon_finder, dist_cal
 from config import *
 from prompts import *
+import csv
+
+
+#pip install --upgrade httpx openai
+
+
 
 # Configure logging
-# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -20,23 +25,27 @@ def food_llm(input_sentence):
 
 
     # logger : start service
-    # logger.info(f"Processing input: {input_sentence}")
+    logger.info(f"Processing input: {input_sentence}")
 
 
 
 
 
 
-    # logger : llm1 call for feature extraction
+    # feature extraction LLM
     try:
-        llm1_output = get_completion(open_ai_api_key_2, 
-                                prompt=extractor_llm_prompt(input_sentence),
-                                model="gpt-3.5-turbo",
-                                temperature=0.7
-                                )['choices'][0]['message']['content']
-        # logger.info("Feature extraction completed successfully")
+        #llm1_output = get_completion(prompt = extractor_llm_prompt(input_sentence))
+        llm1_output = {
+                "address": "Ward 5 Mary House 4303 13th st NE Washington DC 20017",
+                "region": "DC",
+                "county": "Ward 5",
+                "day": "",
+                "distribution_mode": "",
+                "geo_address": "4303 13th st NE Washington DC 20017",
+                } 
+        logger.info("Feature extraction completed successfully")
     except Exception as e:
-        # logger.error(f"Error in feature extraction: {str(e)}")
+        logger.error(f"Error in feature extraction: {str(e)}")
         return {"error": "Feature extraction failed", "details": str(e)}
 
 
@@ -45,21 +54,27 @@ def food_llm(input_sentence):
 
 
 
-
-    # logger : llm2 call for sql generation
+    # Sql generation LLM
     try:
-        df = pd.read_csv('data.csv')
-        filtered_df = df[(df['Region'] == llm1_output['region']) & (df['County'] == llm1_output['county'])]
+        filtered_df = []
+        with open('data.csv', mode='r') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                if row['Region'] == llm1_output['region'] and row['Zone'].replace(" ", "") == llm1_output['county'].replace(" ", ""):
+                        filtered_df.append(row)
+
+        if not filtered_df:
+            return {"error": "No matching records found in the dataset"}
+
         sql_command = f'''SELECT *
         FROM food_table
         WHERE REGION = '{llm1_output['region']}'
         AND COUNTY = '{llm1_output['county']}'
         '''
-        # logger.info("SQL generation completed successfully")
+        logger.info("SQL generation completed successfully")
     except Exception as e:
-        # logger.error(f"Error in SQL generation: {str(e)}")
+        logger.error(f"Error in SQL generation: {str(e)}")
         return {"error": "SQL generation failed", "details": str(e)}
-
 
 
 
@@ -67,12 +82,12 @@ def food_llm(input_sentence):
 
     # convert address to (lat, long)
     try:
-        lat, lon = lat_lon_finder(llm1_output['address'])
+        lat, lon = lat_lon_finder(llm1_output['geo_address'])
         if lat is None or lon is None:
-            # logger.warning("Could not geocode the address")
+            logger.warning("Could not geocode the address")
             return {"error": "Could not geocode the address"}
     except Exception as e:
-        # logger.error(f"Error in geocoding: {str(e)}")
+        logger.error(f"Error in geocoding: {str(e)}")
         return {"error": "Geocoding failed", "details": str(e)}
 
 
@@ -89,9 +104,9 @@ def food_llm(input_sentence):
             nearest_neighbours.append((dist, display_addr))
             if len(nearest_neighbours) >= 10:
                 break
-        # logger.info(f"Found {len(nearest_neighbours)} nearest locations")
+        logger.info(f"Found {len(nearest_neighbours)} nearest locations")
     except Exception as e:
-        # logger.error(f"Error in distance calculation: {str(e)}")
+        logger.error(f"Error in distance calculation: {str(e)}")
         return {"error": "Distance calculation failed", "details": str(e)}
 
 
@@ -100,15 +115,16 @@ def food_llm(input_sentence):
 
 
     # LLM call to analyse which of the top 10 are most elegible
+    # instead use embedding search in presentation
     try:
         llm2_output = get_completion(open_ai_api_key, 
                                 prompt=summary_llm_prompt(input_sentence, llm1_output),
                                 model="gpt-3.5-turbo",
                                 temperature=0.7
                                 )['choices'][0]['message']['content']
-        # logger.info("Summary generation completed successfully")
+        logger.info("Summary generation completed successfully")
     except Exception as e:
-        # logger.error(f"Error in summary generation: {str(e)}")
+        logger.error(f"Error in summary generation: {str(e)}")
         return {"error": "Summary generation failed", "details": str(e)}
 
 

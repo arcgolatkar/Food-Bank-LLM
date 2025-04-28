@@ -1,10 +1,14 @@
-import pandas as pd
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import time
 import re
 import os
+
+DEFAULT_CITY = None # Example: "Washington" or None if usually present
+DEFAULT_STATE = None # Example: "DC" or None
+DEFAULT_COUNTRY = "USA"
+DEFAULT_COUNTRY_CODE = "us" # 2-letter ISO code for country_codes
 
 def geocode_address(geolocator, address, attempt=1, max_attempts=3):
     
@@ -51,26 +55,22 @@ def lat_lon_finder(user_address_str):
 
     return (user_lat, user_lon)
 
-def dist_cal(lat, lon, df):
-
-    df['Latitude'] = pd.to_numeric(df['Latitude'], errors='coerce')
-    df['Longitude'] = pd.to_numeric(df['Longitude'], errors='coerce')
-    df.dropna(subset=['Latitude', 'Longitude'], inplace=True)
+def dist_cal(lat, lon, data_rows):
 
     all_distances = []
 
-    for index, row in df.iterrows():
+    for row in data_rows:
+        try:
 
-        if pd.isna(row['Processed_For_Geocoding']):
+            # Calculate distance in kilometers
+            distance_km = geodesic((lat, lon), (float(row['Latitude']), float(row['Longitude']))).km
+            
+            # Add to results
+            all_distances.append(( distance_km,  str(row['Processed_For_Geocoding'])))
+        except (ValueError, TypeError):
+            # Skip rows with invalid lat/lon values
             continue
 
-        distance_km = geodesic((lat, lon), 
-                                (row['Latitude'], row['Longitude'])
-                                ).km
-
-        all_distances.append((
-                            distance_km, 
-                            str(row['Processed_For_Geocoding'])
-                            ))
-
-    return  all_distances.sort(key=lambda x: x[0])
+    # Sort the distances
+    all_distances.sort(key=lambda x: x[0])
+    return all_distances
