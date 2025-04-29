@@ -1,0 +1,57 @@
+Name: MainWorkflow
+SchemaVersion: 1.0
+
+# Define when the workflow will run
+Triggers:
+  - Type: PUSH
+    Branches:
+      - main
+
+# Define environment variables to be used across actions
+env:
+  APPLICATION_NAME: "food-bank-llm"
+  ENVIRONMENT_NAME: "food-bank-llm-env"
+
+# Define the workflow actions
+Actions:
+  BuildAndTest:
+    Identifier: aws/build@v1
+    Configuration:
+      Steps:
+        - Run: echo "Installing dependencies..."
+        - Run: pip install --no-cache-dir -r requirements.txt
+        - Run: echo "Running linting or tests if available..."
+        # Add tests here if you have any
+    Outputs:
+      AutoDiscoverReports:
+        Enabled: true
+        ReportNamePrefix: test-reports
+  
+  BuildArtifact:
+    Identifier: aws/build@v1
+    DependsOn:
+      - BuildAndTest
+    Configuration:
+      Steps:
+        - Run: echo "Building deployment package..."
+        - Run: |
+            mkdir -p build
+            cp -r .ebextensions build/
+            cp *.py build/
+            cp data.csv build/
+            cp requirements.txt build/
+            cp Dockerfile build/
+      Artifacts:
+        - Name: ApplicationBundle
+          Files:
+            - build/**/*
+
+  DeployToElasticBeanstalk:
+    Identifier: aws/beanstalk-deploy@v1
+    DependsOn:
+      - BuildArtifact
+    Configuration:
+      Region: ${Workflow.Region}
+      ApplicationName: ${APPLICATION_NAME}
+      EnvironmentName: ${ENVIRONMENT_NAME}
+      ArtifactFile: ApplicationBundle
