@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
     
 def get_completion(prompt: str,
-                    model: str = "gpt-3.5-turbo", #"gpt-4.1"
+                    model: str = "gpt-3.5-turbo", #
                     temperature: float = 0.7,
                     max_tokens: int = 1000,
                     top_p: float = 1.0,

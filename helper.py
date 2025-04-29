@@ -66,7 +66,18 @@ def dist_cal(lat, lon, data_rows):
             distance_km = geodesic((lat, lon), (float(row['Latitude']), float(row['Longitude']))).km
             
             # Add to results
-            all_distances.append(( distance_km,  str(row['Processed_For_Geocoding'])))
+            all_distances.append(( distance_km,  
+                                    str(row['Processed_For_Geocoding']),
+                                    row['Name'],
+                                    row['Phone'],
+                                    row['Day'],
+                                    row['Monthly_schedule'],
+                                    row['Start_time'],
+                                    row['End_time'],
+                                    row['Requirements'],
+                                    row['Distribution_mode'],
+                                    row['Notes']
+                                    ))
         except (ValueError, TypeError):
             # Skip rows with invalid lat/lon values
             continue

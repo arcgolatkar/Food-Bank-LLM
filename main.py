@@ -4,7 +4,6 @@ import logging
 
 from open_ai_helpers import *
 from helper import lat_lon_finder, dist_cal
-from config import *
 from prompts import *
 import csv
 
@@ -34,15 +33,15 @@ def food_llm(input_sentence):
 
     # feature extraction LLM
     try:
-        #llm1_output = get_completion(prompt = extractor_llm_prompt(input_sentence))
+        # llm1_output = get_completion(prompt = extractor_llm_prompt(input_sentence))
         llm1_output = {
-                "address": "Ward 5 Mary House 4303 13th st NE Washington DC 20017",
-                "region": "DC",
-                "county": "Ward 5",
-                "day": "",
-                "distribution_mode": "",
-                "geo_address": "4303 13th st NE Washington DC 20017",
-                } 
+                            "address": "Ward 5 Mary House 4303 13th st NE Washington DC 20017",
+                            "region": "DC",
+                            "county": "Ward 5",
+                            "day": "",
+                            "distribution_mode": "",
+                            "geo_address": "4303 13th st NE Washington DC 20017"
+                        }
         logger.info("Feature extraction completed successfully")
     except Exception as e:
         logger.error(f"Error in feature extraction: {str(e)}")
@@ -100,8 +99,8 @@ def food_llm(input_sentence):
         
         # find top 10 nearest locations
         nearest_neighbours = []
-        for dist, display_addr in all_distances:
-            nearest_neighbours.append((dist, display_addr))
+        for i in all_distances:
+            nearest_neighbours.append(i)
             if len(nearest_neighbours) >= 10:
                 break
         logger.info(f"Found {len(nearest_neighbours)} nearest locations")
@@ -112,16 +111,11 @@ def food_llm(input_sentence):
 
 
 
-
-
     # LLM call to analyse which of the top 10 are most elegible
     # instead use embedding search in presentation
     try:
-        llm2_output = get_completion(open_ai_api_key, 
-                                prompt=summary_llm_prompt(input_sentence, llm1_output),
-                                model="gpt-3.5-turbo",
-                                temperature=0.7
-                                )['choices'][0]['message']['content']
+        llm2_output = get_completion( prompt=summary_llm_prompt(input_sentence, llm1_output, nearest_neighbours),
+                                    model="gpt-4.1")   
         logger.info("Summary generation completed successfully")
     except Exception as e:
         logger.error(f"Error in summary generation: {str(e)}")
