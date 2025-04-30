@@ -1,0 +1,176 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploys the Backend service (Task Definition, Service, ALB, Target Group) for the Food Bank LLM application.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: FoodBankLLM
+    Description: A name for the project to prefix resources.
+  DesiredCount:
+    Type: Number
+    Default: 1
+    Description: Number of tasks to run for the backend service.
+  ContainerCpu:
+    Type: Number
+    Default: 256 # 0.25 vCPU
+    Description: CPU units for the backend container. Fargate choices: 256 (.25 vCPU), 512 (.5 vCPU), 1024 (1 vCPU), 2048 (2 vCPU), 4096 (4 vCPU).
+  ContainerMemory:
+    Type: Number
+    Default: 512 # MiB
+    Description: Memory (MiB) for the backend container. Fargate choices depend on CPU. e.g., 512, 1024, 2048 for .25 vCPU.
+  OpenAiApiKeyParameterName:
+    Type: AWS::SSM::Parameter::Name
+    Description: The name of the SSM Parameter Store SecureString parameter holding the OpenAI API Key. (e.g., /foodbank/openai-api-key)
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Project Configuration
+        Parameters:
+          - ProjectName
+      - Label:
+          default: Service Configuration
+        Parameters:
+          - DesiredCount
+          - ContainerCpu
+          - ContainerMemory
+          - OpenAiApiKeyParameterName
+    ParameterLabels:
+      ProjectName:
+        default: Project Name
+      DesiredCount:
+        default: Desired Task Count
+      ContainerCpu:
+        default: Task CPU Units
+      ContainerMemory:
+        default: Task Memory (MiB)
+      OpenAiApiKeyParameterName:
+        default: OpenAI API Key SSM Parameter Name
+
+Resources:
+  # -- Backend Task Definition --
+  BackendTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${ProjectName}-backend
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      ExecutionRoleArn: !ImportValue ${ProjectName}-ECSTaskExecutionRoleArn
+      # TaskRoleArn: !ImportValue ${ProjectName}-ECSTaskRoleArn # Uncomment if using a task role
+      ContainerDefinitions:
+        - Name: backend-container
+          # Image will be updated by CI/CD, provide a placeholder or initial image
+          Image: !ImportValue ${ProjectName}-BackendECRRepositoryUri # Use Repo URI as placeholder
+          PortMappings:
+            - ContainerPort: 5000 # Backend Port
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !ImportValue ${ProjectName}-BackendLogGroupName
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Secrets: # Fetch OpenAI key from SSM Parameter Store
+            - Name: OPENAI_API_KEY
+              ValueFrom: !Ref OpenAiApiKeyParameterName
+          Essential: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-BackendTaskDefinition
+
+  # -- Backend ALB Target Group --
+  BackendTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${ProjectName}-BackendTG
+      VpcId: !ImportValue ${ProjectName}-VPCId
+      Protocol: HTTP
+      Port: 5000 # Backend Port
+      TargetType: ip
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /api/health # Backend health check path
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200'
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-BackendTG
+
+  # -- Backend Application Load Balancer --
+  BackendAlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${ProjectName}-BackendAlb
+      Scheme: internet-facing
+      Subnets:
+        - !ImportValue ${ProjectName}-PublicSubnet1Id
+        - !ImportValue ${ProjectName}-PublicSubnet2Id
+      SecurityGroups:
+        - !ImportValue ${ProjectName}-AlbSecurityGroupId
+      Type: application
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-BackendAlb
+
+  BackendListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref BackendAlb
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
+  # -- Backend ECS Service --
+  BackendService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub ${ProjectName}-BackendService
+      Cluster: !ImportValue ${ProjectName}-ECSClusterName
+      TaskDefinition: !Ref BackendTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED # For Fargate tasks in public subnets to pull images
+          Subnets:
+            - !ImportValue ${ProjectName}-PublicSubnet1Id
+            - !ImportValue ${ProjectName}-PublicSubnet2Id
+          SecurityGroups:
+            - !ImportValue ${ProjectName}-BackendTaskSecurityGroupId
+      LoadBalancers:
+        - ContainerName: backend-container
+          ContainerPort: 5000 # Backend Port
+          TargetGroupArn: !Ref BackendTargetGroup
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-BackendService
+    # DependsOn: BackendListener # Ensure Listener is created before Service attaches
+
+Outputs:
+  BackendServiceName:
+    Description: The name of the Backend ECS Service
+    Value: !GetAtt BackendService.Name
+    Export:
+      Name: !Sub ${ProjectName}-BackendServiceName
+  BackendTaskDefinitionArn:
+    Description: The ARN of the Backend Task Definition
+    Value: !Ref BackendTaskDefinition
+    Export:
+      Name: !Sub ${ProjectName}-BackendTaskDefinitionArn
+  BackendALBEndpoint:
+    Description: The DNS Name of the Backend Application Load Balancer
+    Value: !GetAtt BackendAlb.DNSName
+    Export:
+      Name: !Sub ${ProjectName}-BackendALBEndpoint

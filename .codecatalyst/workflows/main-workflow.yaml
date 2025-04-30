@@ -1,57 +1,113 @@
-Name: MainWorkflow
+Name: BuildPushDeployPipeline
 SchemaVersion: 1.0
 
 # Define when the workflow will run
 Triggers:
   - Type: PUSH
     Branches:
-      - main
+      - main # Or your primary branch
 
-# Define environment variables to be used across actions
-env:
-  APPLICATION_NAME: "food-bank-llm"
-  ENVIRONMENT_NAME: "food-bank-llm-env"
+# Define environment variables - IMPORTANT: Set these in CodeCatalyst Environment Secrets or Workflow Variables
+# These assume you used the default ProjectName 'FoodBankLLM' in CloudFormation. Adjust if needed.
+# Alternatively, query these using AWS CLI in a build step if dynamic lookup is required.
+Variables:
+  AWS_REGION:
+    Value: "us-east-1" # Replace with your deployment region
+  PROJECT_NAME:
+    Value: "FoodBankLLM" # Must match CFN ProjectName parameter
+  ECR_REPOSITORY_BACKEND_URI:
+    Value: "" # Set in CodeCatalyst Secrets/Variables (Output from cfn-infra stack)
+  ECR_REPOSITORY_FRONTEND_URI:
+    Value: "" # Set in CodeCatalyst Secrets/Variables (Output from cfn-infra stack)
+  ECS_CLUSTER_NAME:
+    Value: "FoodBankLLM-Cluster" # Set in CodeCatalyst or derive from PROJECT_NAME (Output from cfn-infra stack)
+  ECS_SERVICE_BACKEND_NAME:
+    Value: "FoodBankLLM-BackendService" # Set in CodeCatalyst or derive (Output from cfn-backend stack)
+  ECS_SERVICE_FRONTEND_NAME:
+    Value: "FoodBankLLM-FrontendService" # Set in CodeCatalyst or derive (Output from cfn-frontend stack)
+  # You might need Task Definition Family names if updating them directly, but service update is often preferred
+  # ECS_TASK_DEF_BACKEND_FAMILY:
+  #   Value: "FoodBankLLM-backend"
+  # ECS_TASK_DEF_FRONTEND_FAMILY:
+  #   Value: "FoodBankLLM-frontend"
 
 # Define the workflow actions
 Actions:
-  BuildAndTest:
+  # Action to log in Docker to ECR
+  LoginToECR:
     Identifier: aws/build@v1
     Configuration:
       Steps:
-        - Run: echo "Installing dependencies..."
-        - Run: pip install --no-cache-dir -r requirements.txt
-        - Run: echo "Running linting or tests if available..."
-        # Add tests here if you have any
-    Outputs:
-      AutoDiscoverReports:
-        Enabled: true
-        ReportNamePrefix: test-reports
-  
-  BuildArtifact:
-    Identifier: aws/build@v1
-    DependsOn:
-      - BuildAndTest
-    Configuration:
-      Steps:
-        - Run: echo "Building deployment package..."
-        - Run: |
-            mkdir -p build
-            cp -r .ebextensions build/
-            cp *.py build/
-            cp data.csv build/
-            cp requirements.txt build/
-            cp Dockerfile build/
-      Artifacts:
-        - Name: ApplicationBundle
-          Files:
-            - build/**/*
+        - Run: aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+    Compute:
+      Type: EC2 # Or LAMBDA
+      Fleet: Linux.x86_64.Large # Choose appropriate fleet
 
-  DeployToElasticBeanstalk:
-    Identifier: aws/beanstalk-deploy@v1
+  # Build, tag, and push the Backend Docker image
+  BuildPushBackend:
+    Identifier: aws/build@v1
     DependsOn:
-      - BuildArtifact
+      - LoginToECR
     Configuration:
-      Region: ${Workflow.Region}
-      ApplicationName: ${APPLICATION_NAME}
-      EnvironmentName: ${ENVIRONMENT_NAME}
-      ArtifactFile: ApplicationBundle
+      Steps:
+        - Run: echo "Building Backend image..."
+        - Run: cd backend && docker build -t ${ECR_REPOSITORY_BACKEND_URI}:latest .
+        - Run: docker tag ${ECR_REPOSITORY_BACKEND_URI}:latest ${ECR_REPOSITORY_BACKEND_URI}:${CODECATALYST_SOURCE_REVISION_ID}
+        - Run: echo "Pushing Backend image..."
+        - Run: docker push ${ECR_REPOSITORY_BACKEND_URI}:latest
+        - Run: docker push ${ECR_REPOSITORY_BACKEND_URI}:${CODECATALYST_SOURCE_REVISION_ID}
+    Compute:
+      Type: EC2
+      Fleet: Linux.x86_64.Large
+
+  # Build, tag, and push the Frontend Docker image
+  BuildPushFrontend:
+    Identifier: aws/build@v1
+    DependsOn:
+      - LoginToECR
+    Configuration:
+      Steps:
+        - Run: echo "Building Frontend image..."
+        - Run: cd frontend && docker build -t ${ECR_REPOSITORY_FRONTEND_URI}:latest .
+        - Run: docker tag ${ECR_REPOSITORY_FRONTEND_URI}:latest ${ECR_REPOSITORY_FRONTEND_URI}:${CODECATALYST_SOURCE_REVISION_ID}
+        - Run: echo "Pushing Frontend image..."
+        - Run: docker push ${ECR_REPOSITORY_FRONTEND_URI}:latest
+        - Run: docker push ${ECR_REPOSITORY_FRONTEND_URI}:${CODECATALYST_SOURCE_REVISION_ID}
+    Compute:
+      Type: EC2
+      Fleet: Linux.x86_64.Large
+
+  # Deploy the updated Backend service to ECS
+  DeployBackend:
+    Identifier: aws/ecs-deploy@v1
+    DependsOn:
+      - BuildPushBackend
+    Configuration:
+      Cluster: ${ECS_CLUSTER_NAME}
+      Service: ${ECS_SERVICE_BACKEND_NAME}
+      # TaskDefinition: ${ECS_TASK_DEF_BACKEND_FAMILY} # Optional: Or let service update handle it
+      # Image: Specify image URI if updating Task Def directly # ${ECR_REPOSITORY_BACKEND_URI}:${CODECATALYST_SOURCE_REVISION_ID}
+      Region: ${AWS_REGION}
+      ForceNewDeployment: true # Ensures the service pulls the new image/task def revision
+    Environment:
+      Connections:
+        - Role: CodeCatalystPreviewDevelopmentAdministrator # Choose appropriate connection/role
+          Name: "<YOUR_AWS_ACCOUNT_CONNECTION>" # Replace with your connection name
+
+  # Deploy the updated Frontend service to ECS
+  DeployFrontend:
+    Identifier: aws/ecs-deploy@v1
+    DependsOn:
+      - BuildPushFrontend
+      - DeployBackend # Ensure backend is deployed first as frontend depends on its endpoint
+    Configuration:
+      Cluster: ${ECS_CLUSTER_NAME}
+      Service: ${ECS_SERVICE_FRONTEND_NAME}
+      # TaskDefinition: ${ECS_TASK_DEF_FRONTEND_FAMILY} # Optional
+      # Image: Specify image URI if updating Task Def directly # ${ECR_REPOSITORY_FRONTEND_URI}:${CODECATALYST_SOURCE_REVISION_ID}
+      Region: ${AWS_REGION}
+      ForceNewDeployment: true
+    Environment:
+      Connections:
+        - Role: CodeCatalystPreviewDevelopmentAdministrator # Choose appropriate connection/role
+          Name: "<YOUR_AWS_ACCOUNT_CONNECTION>" # Replace with your connection name

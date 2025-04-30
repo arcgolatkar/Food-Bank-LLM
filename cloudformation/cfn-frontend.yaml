@@ -1,0 +1,175 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploys the Frontend service (Task Definition, Service, ALB, Target Group) for the Food Bank LLM application.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: FoodBankLLM
+    Description: A name for the project to prefix resources.
+  DesiredCount:
+    Type: Number
+    Default: 1
+    Description: Number of tasks to run for the frontend service.
+  ContainerCpu:
+    Type: Number
+    Default: 256 # 0.25 vCPU
+    Description: CPU units for the frontend container.
+  ContainerMemory:
+    Type: Number
+    Default: 512 # MiB
+    Description: Memory (MiB) for the frontend container.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Project Configuration
+        Parameters:
+          - ProjectName
+      - Label:
+          default: Service Configuration
+        Parameters:
+          - DesiredCount
+          - ContainerCpu
+          - ContainerMemory
+    ParameterLabels:
+      ProjectName:
+        default: Project Name
+      DesiredCount:
+        default: Desired Task Count
+      ContainerCpu:
+        default: Task CPU Units
+      ContainerMemory:
+        default: Task Memory (MiB)
+
+Resources:
+  # -- Frontend Task Definition --
+  FrontendTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${ProjectName}-frontend
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      ExecutionRoleArn: !ImportValue ${ProjectName}-ECSTaskExecutionRoleArn
+      # TaskRoleArn: !ImportValue ${ProjectName}-ECSTaskRoleArn # Uncomment if using a task role
+      ContainerDefinitions:
+        - Name: frontend-container
+          # Image will be updated by CI/CD, provide a placeholder or initial image
+          Image: !ImportValue ${ProjectName}-FrontendECRRepositoryUri # Placeholder
+          PortMappings:
+            - ContainerPort: 8501 # Frontend Port
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !ImportValue ${ProjectName}-FrontendLogGroupName
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Environment: # Pass Backend URL to Frontend
+            - Name: BACKEND_URL
+              Value: !Sub http://${!ImportValue ${ProjectName}-BackendALBEndpoint}/api/process # Construct URL
+            # Add other environment variables if needed by Streamlit app
+            - Name: STREAMLIT_SERVER_PORT
+              Value: "8501"
+            - Name: STREAMLIT_SERVER_ADDRESS
+              Value: "0.0.0.0" # Ensure Streamlit binds correctly inside container
+          Essential: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-FrontendTaskDefinition
+
+  # -- Frontend ALB Target Group --
+  FrontendTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${ProjectName}-FrontendTG
+      VpcId: !ImportValue ${ProjectName}-VPCId
+      Protocol: HTTP
+      Port: 8501 # Frontend Port
+      TargetType: ip
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: / # Frontend health check path (Streamlit root)
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200' # Streamlit usually returns 200 for root
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-FrontendTG
+
+  # -- Frontend Application Load Balancer --
+  FrontendAlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${ProjectName}-FrontendAlb
+      Scheme: internet-facing
+      Subnets:
+        - !ImportValue ${ProjectName}-PublicSubnet1Id
+        - !ImportValue ${ProjectName}-PublicSubnet2Id
+      SecurityGroups:
+        - !ImportValue ${ProjectName}-AlbSecurityGroupId
+      Type: application
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-FrontendAlb
+
+  FrontendListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref FrontendAlb
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FrontendTargetGroup
+
+  # -- Frontend ECS Service --
+  FrontendService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub ${ProjectName}-FrontendService
+      Cluster: !ImportValue ${ProjectName}-ECSClusterName
+      TaskDefinition: !Ref FrontendTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED # For Fargate tasks in public subnets
+          Subnets:
+            - !ImportValue ${ProjectName}-PublicSubnet1Id
+            - !ImportValue ${ProjectName}-PublicSubnet2Id
+          SecurityGroups:
+            - !ImportValue ${ProjectName}-FrontendTaskSecurityGroupId
+      LoadBalancers:
+        - ContainerName: frontend-container
+          ContainerPort: 8501 # Frontend Port
+          TargetGroupArn: !Ref FrontendTargetGroup
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-FrontendService
+    # DependsOn: FrontendListener # Ensure Listener is created before Service attaches
+
+Outputs:
+  FrontendServiceName:
+    Description: The name of the Frontend ECS Service
+    Value: !GetAtt FrontendService.Name
+    Export:
+      Name: !Sub ${ProjectName}-FrontendServiceName
+  FrontendTaskDefinitionArn:
+    Description: The ARN of the Frontend Task Definition
+    Value: !Ref FrontendTaskDefinition
+    Export:
+      Name: !Sub ${ProjectName}-FrontendTaskDefinitionArn
+  FrontendALBEndpoint:
+    Description: The DNS Name of the Frontend Application Load Balancer (User Access Point)
+    Value: !GetAtt FrontendAlb.DNSName
+    Export:
+      Name: !Sub ${ProjectName}-FrontendALBEndpoint

@@ -1,0 +1,252 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates Networking (VPC, Subnets, IGW, Routes) and Security (SGs, IAM Roles) resources for the Food Bank LLM application.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: FoodBankLLM
+    Description: A name for the project to prefix resources.
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for the VPC.
+  PublicSubnet1Cidr:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for Public Subnet 1 in AZ1.
+  PublicSubnet2Cidr:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: CIDR block for Public Subnet 2 in AZ2.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Project Configuration
+        Parameters:
+          - ProjectName
+      - Label:
+          default: Network Configuration
+        Parameters:
+          - VpcCidr
+          - PublicSubnet1Cidr
+          - PublicSubnet2Cidr
+    ParameterLabels:
+      ProjectName:
+        default: Project Name
+      VpcCidr:
+        default: VPC CIDR Block
+      PublicSubnet1Cidr:
+        default: Public Subnet 1 CIDR
+      PublicSubnet2Cidr:
+        default: Public Subnet 2 CIDR
+
+Resources:
+  # -- Networking --
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-VPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-IGW
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-PublicSubnet1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-PublicSubnet2
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-PublicRouteTable
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # -- Security Groups --
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${ProjectName}-AlbSG
+      GroupDescription: Allows HTTP access to the ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-AlbSG
+
+  BackendTaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${ProjectName}-BackendTaskSG
+      GroupDescription: Allows access to Backend tasks from the ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref AlbSecurityGroup # Allow from *any* ALB in this SG
+          IpProtocol: tcp
+          FromPort: 5000 # Backend Port
+          ToPort: 5000
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-BackendTaskSG
+
+  FrontendTaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${ProjectName}-FrontendTaskSG
+      GroupDescription: Allows access to Frontend tasks from the ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref AlbSecurityGroup # Allow from *any* ALB in this SG
+          IpProtocol: tcp
+          FromPort: 8501 # Frontend Port
+          ToPort: 8501
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-FrontendTaskSG
+
+  # -- IAM Roles --
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-ECSTaskExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies: # Add permission to read the OpenAI key from SSM
+        - PolicyName: !Sub ${ProjectName}-SSMReadPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameters
+                # Restrict to the specific parameter if known, otherwise broader permission
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/* # Adjust if parameter name differs
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-ECSTaskExecutionRole
+
+  # Optional: Task Role if containers need AWS API access beyond execution role
+  # ECSTaskRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub ${ProjectName}-ECSTaskRole
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: ecs-tasks.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     # Add necessary policies here if needed
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub ${ProjectName}-ECSTaskRole
+
+Outputs:
+  VPCId:
+    Description: The ID of the VPC
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${ProjectName}-VPCId
+  PublicSubnet1Id:
+    Description: The ID of Public Subnet 1
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub ${ProjectName}-PublicSubnet1Id
+  PublicSubnet2Id:
+    Description: The ID of Public Subnet 2
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub ${ProjectName}-PublicSubnet2Id
+  AlbSecurityGroupId:
+    Description: The ID of the ALB Security Group
+    Value: !Ref AlbSecurityGroup
+    Export:
+      Name: !Sub ${ProjectName}-AlbSecurityGroupId
+  BackendTaskSecurityGroupId:
+    Description: The ID of the Backend Task Security Group
+    Value: !Ref BackendTaskSecurityGroup
+    Export:
+      Name: !Sub ${ProjectName}-BackendTaskSecurityGroupId
+  FrontendTaskSecurityGroupId:
+    Description: The ID of the Frontend Task Security Group
+    Value: !Ref FrontendTaskSecurityGroup
+    Export:
+      Name: !Sub ${ProjectName}-FrontendTaskSecurityGroupId
+  ECSTaskExecutionRoleArn:
+    Description: ARN of the ECS Task Execution Role
+    Value: !GetAtt ECSTaskExecutionRole.Arn
+    Export:
+      Name: !Sub ${ProjectName}-ECSTaskExecutionRoleArn
+  # Optional: Task Role ARN output
+  # ECSTaskRoleArn:
+  #   Description: ARN of the ECS Task Role
+  #   Value: !GetAtt ECSTaskRole.Arn
+  #   Export:
+  #     Name: !Sub ${ProjectName}-ECSTaskRoleArn
