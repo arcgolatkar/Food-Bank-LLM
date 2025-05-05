@@ -1,0 +1,155 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2.0.0 # Use SAM transform for potential future simplifications
+Description: >-
+  Infrastructure for the Backend service running on ECS Fargate.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Description: Name of the environment (e.g., dev, prod) used for resource naming.
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: The VPC to deploy resources into.
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: The Subnets for the ECS tasks.
+  ImageUrl:
+    Type: String
+    Description: The Docker Image URL for the backend container (from ECR).
+
+Resources:
+  # --- ECR Repository (Consider creating this once, maybe in a shared stack) ---
+  # If creating per-service:
+  BackendRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${AWS::StackName}-backend'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: MUTABLE # Or IMMUTABLE
+
+  # --- ECS Cluster (Consider creating this once, maybe in a shared stack) ---
+  # If creating per-service (less common):
+  # Cluster:
+  #   Type: AWS::ECS::Cluster
+  #   Properties:
+  #     ClusterName: !Sub '${EnvironmentName}-cluster'
+
+  # --- Logging ---
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${AWS::StackName}-backend'
+      RetentionInDays: 14
+
+  # --- IAM Roles ---
+  # Role for ECS Agent to pull ECR images, write logs
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-BackendTaskExecRole'
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs-tasks.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  # Optional: Role for your application code inside the container (if it needs to call AWS APIs)
+  # ECSTaskRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #      RoleName: !Sub '${AWS::StackName}-BackendTaskRole'
+  #      AssumeRolePolicyDocument: ...
+  #      Policies: ... # Grant permissions needed by your backend code
+
+  # --- Security Group ---
+  BackendSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+          GroupName: !Sub '${AWS::StackName}-BackendSG'
+          GroupDescription: Allows inbound traffic to the backend service
+          VpcId: !Ref VpcId
+          SecurityGroupIngress:
+              # Example: Allow traffic from a Load Balancer Security Group (Needs Parameter)
+              # - IpProtocol: tcp
+              #   FromPort: 8080 # Your backend container port
+              #   ToPort: 8080
+              #   SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+              # Example: Allow all traffic on the port (Less Secure - for testing)
+              - IpProtocol: tcp
+                FromPort: 8080 # CHANGE TO YOUR BACKEND PORT
+                ToPort: 8080 # CHANGE TO YOUR BACKEND PORT
+                CidrIp: 0.0.0.0/0
+
+  # --- ECS Task Definition ---
+  BackendTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${AWS::StackName}-backend'
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: 256 # 0.25 vCPU
+      Memory: 512 # 0.5 GB (Adjust as needed)
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      # TaskRoleArn: !Ref ECSTaskRole # Uncomment if you defined a Task Role
+      ContainerDefinitions:
+        - Name: backend-container
+          Image: !Ref ImageUrl # This is passed from the CI/CD workflow
+          PortMappings:
+            - ContainerPort: 8080 # CHANGE TO YOUR BACKEND PORT
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  # --- ECS Service ---
+  BackendService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub '${AWS::StackName}-backend-service'
+      Cluster: !Sub '${EnvironmentName}-cluster' # Assumes cluster exists (Pass ARN or name as parameter, or use ImportValue from shared stack)
+      TaskDefinition: !Ref BackendTaskDefinition
+      DesiredCount: 1 # Start with one instance
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED # Or DISABLED if using private subnets and a NAT Gateway/VPC Endpoint
+          Subnets: !Ref SubnetIds
+          SecurityGroups:
+            - !Ref BackendSecurityGroup
+      # --- Optional: Load Balancer Configuration ---
+      # LoadBalancers:
+      #   - ContainerName: backend-container
+      #     ContainerPort: 8080 # Your backend container port
+      #     TargetGroupArn: !Ref BackendTargetGroup # Reference a Target Group defined below or in another stack
+
+# --- Optional: Load Balancer Resources (if needed for backend) ---
+# You might have a separate ALB for backend internal traffic or none if called directly by frontend
+# BackendTargetGroup:
+#   Type: AWS::ElasticLoadBalancingV2::TargetGroup
+#   Properties:
+#     Name: !Sub '${AWS::StackName}-backend-tg'
+#     VpcId: !Ref VpcId
+#     Protocol: HTTP
+#     Port: 8080 # Your backend container port
+#     TargetType: ip
+#     HealthCheck: ...
+
+Outputs:
+  BackendServiceName:
+    Description: The name of the ECS Service for the backend
+    Value: !Ref BackendService
+  BackendTaskDefinitionArn:
+    Description: ARN of the created Task Definition
+    Value: !Ref BackendTaskDefinition
+  BackendEcrRepoUri:
+    Description: URI of the ECR Repository for the backend
+    Value: !GetAtt BackendRepository.RepositoryUri
+    Condition: BackendRepositoryExists # Add a condition if ECR repo creation is optional
+  # Add other outputs as needed (e.g., Security Group ID)
