@@ -13,6 +13,11 @@ Actions:
     Inputs:
       Sources:
         - WorkflowSource
+    Variables:
+      - Name: AWS_REGION
+        Value: us-west-2
+      - Name: AWS_ACCOUNT_ID
+        Value: 727646504965
     Outputs:
       AutoDiscoverReports:
         Enabled: true
@@ -39,6 +44,11 @@ Actions:
     Inputs:
       Sources:
         - WorkflowSource
+    Variables:
+      - Name: AWS_REGION
+        Value: us-west-2
+      - Name: AWS_ACCOUNT_ID
+        Value: 727646504965
     Outputs:
       AutoDiscoverReports:
         Enabled: true
@@ -64,6 +74,11 @@ Actions:
     Identifier: aws/cfn-deploy@v1
     DependsOn:
       - BuildBackendImage
+    Variables:
+      - Name: AWS_REGION
+        Value: us-west-2
+      - Name: AWS_ACCOUNT_ID
+        Value: 727646504965
     Inputs:
       Sources:
         - WorkflowSource
@@ -92,6 +107,12 @@ Actions:
     Identifier: aws/cfn-deploy@v1
     DependsOn:
       - BuildFrontendImage
+      - DeployBackendStack
+    Variables:
+      - Name: AWS_REGION
+        Value: us-west-2
+      - Name: AWS_ACCOUNT_ID
+        Value: 727646504965
     Inputs:
       Sources:
         - WorkflowSource
@@ -116,6 +137,11 @@ Actions:
   # 5. Force New ECS Deployment for Backend
   ForceBackendDeploy:
     Identifier: aws/build@v1
+    Variables:
+      - Name: AWS_REGION
+        Value: us-west-2
+      - Name: AWS_ACCOUNT_ID
+        Value: 727646504965
     DependsOn:
       - DeployBackendStack
     Inputs:
@@ -141,6 +167,11 @@ Actions:
   # 6. Force New ECS Deployment for Frontend
   ForceFrontendDeploy:
      Identifier: aws/build@v1
+     Variables:
+      - Name: AWS_REGION
+        Value: us-west-2
+      - Name: AWS_ACCOUNT_ID
+        Value: 727646504965
      DependsOn:
        - DeployFrontendStack
      Inputs:
