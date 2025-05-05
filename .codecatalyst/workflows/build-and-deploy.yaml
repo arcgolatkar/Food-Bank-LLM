@@ -13,11 +13,11 @@ Actions:
     Inputs:
       Sources:
         - WorkflowSource
-    Variables:
-      - Name: AWS_REGION
-        Value: us-west-2
-      - Name: AWS_ACCOUNT_ID
-        Value: 727646504965
+      Variables:
+        - Name: AWS_REGION
+          Value: us-west-2
+        - Name: AWS_ACCOUNT_ID
+          Value: 727646504965
     Outputs:
       AutoDiscoverReports:
         Enabled: true
@@ -44,11 +44,12 @@ Actions:
     Inputs:
       Sources:
         - WorkflowSource
-    Variables:
+      Variables:
       - Name: AWS_REGION
         Value: us-west-2
       - Name: AWS_ACCOUNT_ID
         Value: 727646504965
+
     Outputs:
       AutoDiscoverReports:
         Enabled: true
@@ -74,14 +75,14 @@ Actions:
     Identifier: aws/cfn-deploy@v1
     DependsOn:
       - BuildBackendImage
-    Variables:
+    Inputs:
+      Sources:
+        - WorkflowSource
+      Variables:
       - Name: AWS_REGION
         Value: us-west-2
       - Name: AWS_ACCOUNT_ID
         Value: 727646504965
-    Inputs:
-      Sources:
-        - WorkflowSource
     Environment:
         Name: dev
         Connections:
@@ -108,14 +109,14 @@ Actions:
     DependsOn:
       - BuildFrontendImage
       - DeployBackendStack
-    Variables:
+    Inputs:
+      Sources:
+        - WorkflowSource
+      Variables:
       - Name: AWS_REGION
         Value: us-west-2
       - Name: AWS_ACCOUNT_ID
         Value: 727646504965
-    Inputs:
-      Sources:
-        - WorkflowSource
     Environment:
         Name: dev
         Connections:
@@ -137,15 +138,15 @@ Actions:
   # 5. Force New ECS Deployment for Backend
   ForceBackendDeploy:
     Identifier: aws/build@v1
-    Variables:
-      - Name: AWS_REGION
-        Value: us-west-2
-      - Name: AWS_ACCOUNT_ID
-        Value: 727646504965
     DependsOn:
       - DeployBackendStack
     Inputs:
       Sources: []
+      Variables:
+      - Name: AWS_REGION
+        Value: us-west-2
+      - Name: AWS_ACCOUNT_ID
+        Value: 727646504965
     Environment:
         Name: dev
         Connections:
