@@ -27,8 +27,8 @@ Actions:
         RegistryCredentialSource: CodeCatalystEnvironment
     Environment:
       Connections:
-        - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
-          Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
+        - Name: srinikeths
+          Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
     Compute:
       Type: EC2
 
@@ -52,8 +52,8 @@ Actions:
         RegistryCredentialSource: CodeCatalystEnvironment
     Environment:
       Connections:
-        - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
-          Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
+        - Name: srinikeths
+          Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
     Compute:
       Type: EC2
 
@@ -67,8 +67,8 @@ Actions:
         - WorkflowSource
     Environment:
         Connections:
-          - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
-            Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
+          - Name: srinikeths
+            Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
     Configuration:
       region: $AWS_REGION
       name: 'my-app-backend-dev'
@@ -95,8 +95,8 @@ Actions:
         - WorkflowSource
     Environment:
         Connections:
-          - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
-            Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
+          - Name: srinikeths
+            Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
     Configuration:
       region: $AWS_REGION
       name: 'my-app-frontend-dev'
@@ -120,8 +120,8 @@ Actions:
       Sources: []
     Environment:
         Connections:
-          - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
-            Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
+          - Name: srinikeths
+            Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
     Compute:
       Type: EC2
     Configuration:
@@ -144,8 +144,8 @@ Actions:
        Sources: []
      Environment:
          Connections:
-           - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
-             Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
+           - Name: srinikeths
+             Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
      Compute:
        Type: EC2
      Configuration:
