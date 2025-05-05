@@ -30,8 +30,8 @@ Actions:
         RegistryCredentialSource: CodeCatalystEnvironment # Important!
       Environment: # Inject environment variables needed by the steps
         Connections:
-          - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME> # Match the name from CodeCatalyst UI
-            Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME> # Match the role name from CodeCatalyst UI
+          - Name: srinkeths # Match the name from CodeCatalyst UI
+            Role: CodeCatalystWorkflowDevelopmentRole-foodBank605 # Match the role name from CodeCatalyst UI
     Compute:
       Type: EC2 # Or LAMBDA
 
@@ -57,8 +57,8 @@ Actions:
         RegistryCredentialSource: CodeCatalystEnvironment
       Environment:
         Connections:
-          - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
-            Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
+          - Name: srinkeths
+            Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
     Compute:
       Type: EC2
 
@@ -83,8 +83,8 @@ Actions:
         ImageUrl=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-backend:$CODECATALYST_SOURCE_REVISION_git_FullHash
     Environment:
         Connections:
-          - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
-            Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
+          - Name: srinkeths
+            Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
 
   # 4. Deploy Frontend Infrastructure and Application Update
   DeployFrontendStack:
@@ -107,8 +107,8 @@ Actions:
         ImageUrl=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-frontend:$CODECATALYST_SOURCE_REVISION_git_FullHash
     Environment:
         Connections:
-          - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
-            Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
+          - Name: srinkeths
+            Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
 
   # 5. (Optional but Recommended) Force New ECS Deployment
   # CloudFormation updates the Task Definition, but doesn't always trigger an immediate service rollout.
@@ -131,8 +131,8 @@ Actions:
           aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment --region $AWS_REGION
     Environment:
         Connections:
-          - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
-            Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
+          - Name: srinkeths
+            Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
 
   ForceFrontendDeploy:
      # Similar structure to ForceBackendDeploy, using Frontend stack outputs/names
@@ -150,7 +150,7 @@ Actions:
          RegistryCredentialSource: CodeCatalystEnvironment
      Environment:
          Connections:
-           - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
-             Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
+           - Name: srinkeths
+             Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
      Compute:
        Type: EC2
