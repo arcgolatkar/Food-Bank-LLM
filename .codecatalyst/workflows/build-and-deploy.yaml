@@ -22,10 +22,11 @@ Actions:
         - Run: aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
         - Run: docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-backend:$CODECATALYST_SOURCE_REVISION_git_FullHash backend/
         - Run: docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-backend:$CODECATALYST_SOURCE_REVISION_git_FullHash
-      Container:
-        Image: public.ecr.aws/aws-cli/aws-cli:latest
-        RegistryCredentialSource: CodeCatalystEnvironment
+    #   Container:
+    #     Image: public.ecr.aws/aws-cli/aws-cli:latest
+    #     RegistryCredentialSource: CodeCatalystEnvironment
     Environment:
+      Name: dev
       Connections:
         - Name: srinikeths
           Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
@@ -47,10 +48,11 @@ Actions:
         - Run: aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
         - Run: docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-frontend:$CODECATALYST_SOURCE_REVISION_git_FullHash frontend/
         - Run: docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-frontend:$CODECATALYST_SOURCE_REVISION_git_FullHash
-      Container:
-        Image: public.ecr.aws/aws-cli/aws-cli:latest
-        RegistryCredentialSource: CodeCatalystEnvironment
+      # Container:
+      #   Image: public.ecr.aws/aws-cli/aws-cli:latest
+      #   RegistryCredentialSource: CodeCatalystEnvironment
     Environment:
+      Name: dev
       Connections:
         - Name: srinikeths
           Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
@@ -66,6 +68,7 @@ Actions:
       Sources:
         - WorkflowSource
     Environment:
+        Name: dev
         Connections:
           - Name: srinikeths
             Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
@@ -76,11 +79,10 @@ Actions:
         template: backend/template.yaml
       # --- Corrected Parameters format ---
         # Use standard YAML map format
-        EnvironmentName: dev
-        VpcId: <YOUR_VPC_ID> # Replace with actual ID or lookup
+        # VpcId: <YOUR_VPC_ID> # Replace with actual ID or lookup
         # Pass list parameters as a comma-delimited string
-        SubnetIds: '<SUBNET_ID_1>,<SUBNET_ID_2>' # Replace with actual IDs or lookup
-        ImageUrl: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-backend:$CODECATALYST_SOURCE_REVISION_git_FullHash
+        # SubnetIds: '<SUBNET_ID_1>,<SUBNET_ID_2>' # Replace with actual IDs or lookup
+        # ImageUrl: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-backend:$CODECATALYST_SOURCE_REVISION_git_FullHash
         capabilities: CAPABILITY_IAM, CAPABILITY_NAMED_IAM, CAPABILITY_AUTO_EXPAND
         # Ensure your backend/template.yaml expects SubnetIds as 'List<AWS::EC2::Subnet::Id>'
         # The CFN service automatically converts the comma-delimited string to a list for the template.
@@ -94,6 +96,7 @@ Actions:
       Sources:
         - WorkflowSource
     Environment:
+        Name: dev
         Connections:
           - Name: srinikeths
             Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
@@ -103,11 +106,10 @@ Actions:
         region: $AWS_REGION
         name: 'my-app-frontend-dev'
         template: frontend/template.yaml
-        EnvironmentName: dev
-        VpcId: <YOUR_VPC_ID>
-        # Pass list parameters as a comma-delimited string
-        SubnetIds: '<SUBNET_ID_1>,<SUBNET_ID_2>' # Use public subnets if using internet-facing ALB
-        ImageUrl: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-frontend:$CODECATALYST_SOURCE_REVISION_git_FullHash
+        # VpcId: <YOUR_VPC_ID>
+        # # Pass list parameters as a comma-delimited string
+        # SubnetIds: '<SUBNET_ID_1>,<SUBNET_ID_2>' # Use public subnets if using internet-facing ALB
+        # ImageUrl: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-frontend:$CODECATALYST_SOURCE_REVISION_git_FullHash
         capabilities: CAPABILITY_IAM, CAPABILITY_NAMED_IAM, CAPABILITY_AUTO_EXPAND
         # Ensure your frontend/template.yaml expects SubnetIds as 'List<AWS::EC2::Subnet::Id>'
 
@@ -119,6 +121,7 @@ Actions:
     Inputs:
       Sources: []
     Environment:
+        Name: dev
         Connections:
           - Name: srinikeths
             Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
@@ -143,6 +146,7 @@ Actions:
      Inputs:
        Sources: []
      Environment:
+         Name: dev
          Connections:
            - Name: srinikeths
              Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
