@@ -12,35 +12,29 @@ Actions:
     Identifier: aws/build@v1
     Inputs:
       Sources:
-        - WorkflowSource # Use the source code checked out by the trigger
+        - WorkflowSource
     Outputs:
       AutoDiscoverReports:
         Enabled: true
         ReportNamePrefix: rptBuildBackend
     Configuration:
       Steps:
-        # Login to ECR - Credentials are automatically available from the Environment connection
         - Run: aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-        # Build the Docker image - Ensure 'my-app-backend' matches your ECR repo name strategy
         - Run: docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-backend:$CODECATALYST_SOURCE_REVISION_git_FullHash backend/
-        # Push the Docker image
         - Run: docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-backend:$CODECATALYST_SOURCE_REVISION_git_FullHash
       Container:
-        Image: public.ecr.aws/aws-cli/aws-cli:latest # Or an image with Docker and AWS CLI
-        RegistryCredentialSource: CodeCatalystEnvironment # Correctly placed under Container
-    # Environment and Compute moved outside Configuration
+        Image: public.ecr.aws/aws-cli/aws-cli:latest
+        RegistryCredentialSource: CodeCatalystEnvironment
     Environment:
       Connections:
-        - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME> # Match the name from CodeCatalyst UI
-          Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME> # Match the role name from CodeCatalyst UI
+        - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
+          Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
     Compute:
-      Type: EC2 # Or LAMBDA
+      Type: EC2
 
   # 2. Build Frontend Docker Image and Push to ECR
   BuildFrontendImage:
     Identifier: aws/build@v1
-    # DependsOn: # Can run in parallel with backend build, remove DependsOn if parallel desired
-    #   - BuildBackendImage
     Inputs:
       Sources:
         - WorkflowSource
@@ -51,13 +45,11 @@ Actions:
     Configuration:
       Steps:
         - Run: aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-        # Ensure 'my-app-frontend' matches your ECR repo name strategy
         - Run: docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-frontend:$CODECATALYST_SOURCE_REVISION_git_FullHash frontend/
         - Run: docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-frontend:$CODECATALYST_SOURCE_REVISION_git_FullHash
       Container:
         Image: public.ecr.aws/aws-cli/aws-cli:latest
-        RegistryCredentialSource: CodeCatalystEnvironment # Correctly placed under Container
-    # Environment and Compute moved outside Configuration
+        RegistryCredentialSource: CodeCatalystEnvironment
     Environment:
       Connections:
         - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
@@ -69,90 +61,87 @@ Actions:
   DeployBackendStack:
     Identifier: aws/cfn-deploy@v1
     DependsOn:
-      - BuildBackendImage # Must run after image is built
+      - BuildBackendImage
     Inputs:
       Sources:
         - WorkflowSource
-    # Environment moved outside Configuration
-    Environment:
-        Connections:
-          - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME> # Grants permission to deploy CFN
-            Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
-    Configuration:
-      # Corrected parameter names
-      region: $AWS_REGION # Provided by environment connection
-      name: 'my-app-backend-dev' # Example stack name (CloudFormation stack name)
-      template: backend/template.yaml # Path to the template file
-      # RoleArn: arn:aws:iam::...:role/CFNExecutionRole # Optional: Specify a specific CFN *service role* ARN if needed
-      Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM # Required if CFN creates IAM roles
-      Parameters: # Pass parameters to the template
-        EnvironmentName=dev
-        VpcId=<YOUR_VPC_ID> # Replace with actual ID or use SSM Parameter Store lookup
-        SubnetIds=["<SUBNET_ID_1>","<SUBNET_ID_2>"] # Replace with actual IDs or lookup
-        ImageUrl=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-backend:$CODECATALYST_SOURCE_REVISION_git_FullHash
-
-  # 4. Deploy Frontend Infrastructure and Application Update
-  DeployFrontendStack:
-    Identifier: aws/cfn-deploy@v1
-    DependsOn:
-      - BuildFrontendImage # Must run after image is built
-    Inputs:
-      Sources:
-        - WorkflowSource
-    # Environment moved outside Configuration
     Environment:
         Connections:
           - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
             Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
     Configuration:
-      # Corrected parameter names
+      region: $AWS_REGION
+      name: 'my-app-backend-dev'
+      template: backend/template.yaml
+      Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
+      # --- Corrected Parameters format ---
+      Parameters:
+        # Use standard YAML map format
+        EnvironmentName: dev
+        VpcId: <YOUR_VPC_ID> # Replace with actual ID or lookup
+        # Pass list parameters as a comma-delimited string
+        SubnetIds: '<SUBNET_ID_1>,<SUBNET_ID_2>' # Replace with actual IDs or lookup
+        ImageUrl: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-backend:$CODECATALYST_SOURCE_REVISION_git_FullHash
+        # Ensure your backend/template.yaml expects SubnetIds as 'List<AWS::EC2::Subnet::Id>'
+        # The CFN service automatically converts the comma-delimited string to a list for the template.
+
+  # 4. Deploy Frontend Infrastructure and Application Update
+  DeployFrontendStack:
+    Identifier: aws/cfn-deploy@v1
+    DependsOn:
+      - BuildFrontendImage
+    Inputs:
+      Sources:
+        - WorkflowSource
+    Environment:
+        Connections:
+          - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
+            Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
+    Configuration:
       region: $AWS_REGION
       name: 'my-app-frontend-dev'
       template: frontend/template.yaml
-      # RoleArn: arn:aws:iam::...:role/CFNExecutionRole # Optional: Specify a specific CFN *service role* ARN if needed
       Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
+      # --- Corrected Parameters format ---
       Parameters:
-        EnvironmentName=dev
-        VpcId=<YOUR_VPC_ID>
-        SubnetIds=["<SUBNET_ID_1>","<SUBNET_ID_2>"] # Use public subnets if using internet-facing ALB
-        ImageUrl=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-frontend:$CODECATALYST_SOURCE_REVISION_git_FullHash
+        EnvironmentName: dev
+        VpcId: <YOUR_VPC_ID>
+        # Pass list parameters as a comma-delimited string
+        SubnetIds: '<SUBNET_ID_1>,<SUBNET_ID_2>' # Use public subnets if using internet-facing ALB
+        ImageUrl: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-app-frontend:$CODECATALYST_SOURCE_REVISION_git_FullHash
+        # Ensure your frontend/template.yaml expects SubnetIds as 'List<AWS::EC2::Subnet::Id>'
 
   # 5. Force New ECS Deployment for Backend
   ForceBackendDeploy:
-    Identifier: aws/build@v1 # Use build action to run AWS CLI
+    Identifier: aws/build@v1
     DependsOn:
       - DeployBackendStack
     Inputs:
-      Sources: [] # No source needed
-    # Environment and Compute moved outside Configuration
+      Sources: []
     Environment:
         Connections:
-          - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME> # Grants permission for ECS actions
+          - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
             Role: <YOUR_CODECATALYST_EXECUTION_ROLE_NAME>
     Compute:
       Type: EC2
     Configuration:
       Steps:
         - Run: |
-            # Assumes 'BackendServiceName' is an output from the backend CFN stack
-            # Assumes cluster name is predictable or passed/queried
             SERVICE_NAME=$(aws cloudformation describe-stacks --stack-name my-app-backend-dev --query "Stacks[0].Outputs[?OutputKey=='BackendServiceName'].OutputValue" --output text --region $AWS_REGION)
-            CLUSTER_NAME='dev-cluster' # IMPORTANT: Make sure this matches your actual cluster name (or get from CFN output/parameter)
+            CLUSTER_NAME='dev-cluster' # IMPORTANT: Make sure this matches your actual cluster name
             if [ -z "$SERVICE_NAME" ]; then echo "Error: Could not find BackendServiceName output for stack my-app-backend-dev"; exit 1; fi
             echo "Forcing new deployment for service: $SERVICE_NAME in cluster $CLUSTER_NAME"
             aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment --region $AWS_REGION
       Container:
          Image: public.ecr.aws/aws-cli/aws-cli:latest
-         # RegistryCredentialSource removed - not needed for this action
 
   # 6. Force New ECS Deployment for Frontend
   ForceFrontendDeploy:
-     Identifier: aws/build@v1 # Use build action to run AWS CLI
+     Identifier: aws/build@v1
      DependsOn:
        - DeployFrontendStack
      Inputs:
        Sources: []
-     # Environment and Compute moved outside Configuration
      Environment:
          Connections:
            - Name: <YOUR_AWS_ACCOUNT_CONNECTION_NAME>
@@ -162,13 +151,10 @@ Actions:
      Configuration:
        Steps:
          - Run: |
-             # Assumes 'FrontendServiceName' is an output from the frontend CFN stack
-             # Assumes cluster name is predictable or passed/queried
              SERVICE_NAME=$(aws cloudformation describe-stacks --stack-name my-app-frontend-dev --query "Stacks[0].Outputs[?OutputKey=='FrontendServiceName'].OutputValue" --output text --region $AWS_REGION)
-             CLUSTER_NAME='dev-cluster' # IMPORTANT: Make sure this matches your actual cluster name (or get from CFN output/parameter)
+             CLUSTER_NAME='dev-cluster' # IMPORTANT: Make sure this matches your actual cluster name
              if [ -z "$SERVICE_NAME" ]; then echo "Error: Could not find FrontendServiceName output for stack my-app-frontend-dev"; exit 1; fi
              echo "Forcing new deployment for service: $SERVICE_NAME in cluster $CLUSTER_NAME"
              aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment --region $AWS_REGION
        Container:
          Image: public.ecr.aws/aws-cli/aws-cli:latest
-         # RegistryCredentialSource removed - not needed for this action
