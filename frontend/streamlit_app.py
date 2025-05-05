@@ -1,12 +1,35 @@
 import streamlit as st
 import requests
+import pandas as pd  # For reading CSV files
 
 # Set backend URL here
 BACKEND_URL = "http://foodbank-backend-alb-545677968.us-east-1.elb.amazonaws.com/api/process"  # Locally test first
 
+# Load authentication data
+auth_data = pd.read_csv("auth_data.csv")
+
+def get_income_level(email):
+    user_data = auth_data[auth_data['email_id'] == email]
+    if not user_data.empty:
+        return int(user_data['income'].values[0])
+    return None
+
 st.set_page_config(page_title="Food Bank Finder Chatbot", page_icon="🛒", layout="centered")
 
 st.title("🛒 Food Bank Finder Chatbot")
+
+email = st.text_input("Enter your email to access the chatbot:")
+if email:
+    income_level = get_income_level(email)
+    if income_level is None:
+        st.error("Email not found in the system. Access denied.")
+        st.stop()
+    elif income_level >= 10000:
+        st.error("Your income level exceeds $10,000. Access denied.")
+        st.stop()
+    else:
+        st.success("Access granted! You can now use the chatbot.")
+
 
 st.markdown("""
 Welcome!  
