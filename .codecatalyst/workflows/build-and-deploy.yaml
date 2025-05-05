@@ -4,7 +4,7 @@ SchemaVersion: 1.0
 Triggers:
   - Type: PUSH
     Branches:
-      - main # Trigger workflow on pushes to the main branch
+      - cfn # Trigger workflow on pushes to the main branch
 
 Actions:
   # 1. Build Backend Docker Image and Push to ECR
