@@ -75,20 +75,20 @@ def food_llm(input_sentence: str) -> dict:
 
     # Step 2: Filter Data from CSV
     try:
-        filtered_df = []
-        with open('data.csv', mode='r') as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                if row['Region'] == llm1_output['region'] and row['Zone'].replace(" ", "") == llm1_output['county'].replace(" ", ""):
-                    filtered_df.append(row)
+        # filtered_df = []
+        # with open('data.csv', mode='r') as file:
+        #     reader = csv.DictReader(file)
+        #     for row in reader:
+        #         if row['Region'] == llm1_output['region'] and row['Zone'].replace(" ", "") == llm1_output['county'].replace(" ", ""):
+        #             filtered_df.append(row)
 
-        #filtered_df = connect_to_postgres(os.getenv('DB_HOST'),
-                                            # os.getenv('DB_NAME'),
-                                            # os.getenv('DB_USER'),
-                                            # os.getenv('DB_PASSWORD'),
-                                            # os.getenv('DB_PORT'),
-                                            # llm1_output,
-                                            # )
+        filtered_df = connect_to_postgres(os.getenv('DB_HOST'),
+                                            os.getenv('DB_NAME'),
+                                            os.getenv('DB_USER'),
+                                            os.getenv('DB_PASSWORD'),
+                                            os.getenv('DB_PORT'),
+                                            llm1_output,
+                                            )
 
         if not filtered_df:
             logger.warning("No matching records found in dataset.")
