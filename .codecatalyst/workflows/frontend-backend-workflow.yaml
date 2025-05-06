@@ -1,0 +1,179 @@
+Name: FoodBankChatbotPipeline
+SchemaVersion: 1.0
+
+# Define triggers for the workflow
+Triggers:
+  - Type: PUSH
+    Branches:
+      - cfn
+
+# Define environment variables for the workflow
+Variables:
+  ACCOUNT_ID: 727646504965
+  REGION: us-east-1
+  BACKEND_ECR_REPO: foodbank-backend-v2
+  FRONTEND_ECR_REPO: foodbank-frontend-v2
+  BACKEND_STACK_NAME: foodbank-backend-v10
+  FRONTEND_STACK_NAME: foodbank-frontend-v10
+  ECS_BACKEND_SERVICE: foodbank-backend-v10
+  ECS_FRONTEND_SERVICE: foodbank-frontend-v10
+  ECS_CLUSTER: FoodBankCluster
+  ECS_FRONTEND_CLUSTER: FoodBankFrontendCluster
+
+# Define the workflow actions
+Actions:
+  # ========== Backend Build & Deploy ==========
+  BuildBackendImage:
+    Identifier: aws/build@v1
+    Inputs:
+      Sources:
+        - WorkflowSource
+    Environment:
+      Name: aws/managed
+      Type: LINUX_CONTAINER
+    Configuration:
+      Steps:
+        - Run: |
+            cd backend
+            aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+            docker build -t $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$BACKEND_ECR_REPO:latest .
+            docker push $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$BACKEND_ECR_REPO:latest
+            echo "::set-output name=IMAGE_TAG::latest"
+    Outputs:
+      Variables:
+        - Name: BACKEND_IMAGE_TAG
+          Value: latest
+
+  DeployBackendCloudFormation:
+    Identifier: aws/cfn-deploy@v1
+    DependsOn:
+      - BuildBackendImage
+    Inputs:
+      Sources:
+        - WorkflowSource
+      Variables:
+        - Name: BACKEND_IMAGE_TAG
+          From: BuildBackendImage
+    Environment:
+      Name: aws/managed
+      Type: LINUX_CONTAINER
+      Connections:
+        - Name: AWS-Account
+          Role: CodeCatalystWorkflowDevelopmentRole-us-east-1
+    Configuration:
+      Region: $REGION
+      StackName: $BACKEND_STACK_NAME
+      TemplatePath: backend-template.yaml
+      TemplateConfigurationPath: backend-parameters.json
+      Capabilities: CAPABILITY_IAM
+      RoleArn: arn:aws:iam::$ACCOUNT_ID:role/CodeCatalystWorkflowDevelopmentRole-us-east-1
+      ParameterOverrides: |
+        {
+          "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$BACKEND_ECR_REPO",
+          "ContainerImage": "$BACKEND_IMAGE_TAG"
+        }
+    Outputs:
+      Variables:
+        - Name: BACKEND_URL
+          Value: $.Outputs.BackendURL
+
+  # ========== Frontend Build & Deploy ==========
+  BuildFrontendImage:
+    Identifier: aws/build@v1
+    Inputs:
+      Sources:
+        - WorkflowSource
+    Environment:
+      Name: aws/managed
+      Type: LINUX_CONTAINER
+    Configuration:
+      Steps:
+        - Run: |
+            cd frontend
+            aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+            docker build -t $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_ECR_REPO:latest .
+            docker push $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_ECR_REPO:latest
+            echo "::set-output name=IMAGE_TAG::latest"
+    Outputs:
+      Variables:
+        - Name: FRONTEND_IMAGE_TAG
+          Value: latest
+
+  DeployFrontendCloudFormation:
+    Identifier: aws/cfn-deploy@v1
+    DependsOn:
+      - BuildFrontendImage
+      - DeployBackendCloudFormation
+    Inputs:
+      Sources:
+        - WorkflowSource
+      Variables:
+        - Name: FRONTEND_IMAGE_TAG
+          From: BuildFrontendImage
+        - Name: BACKEND_URL
+          From: DeployBackendCloudFormation
+    Environment:
+      Name: aws/managed
+      Type: LINUX_CONTAINER
+      Connections:
+        - Name: AWS-Account
+          Role: CodeCatalystWorkflowDevelopmentRole-us-east-1
+    Configuration:
+      Region: $REGION
+      StackName: $FRONTEND_STACK_NAME
+      TemplatePath: frontend-template-fixed.yaml
+      TemplateConfigurationPath: frontend-parameters.json
+      Capabilities: CAPABILITY_IAM
+      RoleArn: arn:aws:iam::$ACCOUNT_ID:role/CodeCatalystWorkflowDevelopmentRole-us-east-1
+      ParameterOverrides: |
+        {
+          "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_ECR_REPO",
+          "ContainerImage": "$FRONTEND_IMAGE_TAG",
+          "BackendURL": "$BACKEND_URL"
+        }
+
+  # ========== Verification ==========
+  VerifyDeployment:
+    Identifier: aws/cli@v1
+    DependsOn:
+      - DeployFrontendCloudFormation
+    Inputs:
+      Sources:
+        - WorkflowSource
+      Variables:
+        - Name: BACKEND_URL
+          From: DeployBackendCloudFormation
+    Environment:
+      Name: aws/managed
+      Type: LINUX_CONTAINER
+      Connections:
+        - Name: AWS-Account
+          Role: CodeCatalystWorkflowDevelopmentRole-us-east-1
+    Configuration:
+      Steps:
+        - Run: |
+            echo "Verifying backend health..."
+            # Try up to 5 times with 10 second sleep in between
+            for i in {1..5}; do
+              resp=$(curl -s ${BACKEND_URL}/api/health || echo "")
+              if echo "$resp" | grep -q "healthy"; then
+                echo "Backend health check successful!"
+                break
+              else
+                echo "Backend not healthy yet, waiting 10 seconds..."
+                sleep 10
+              fi
+              if [ $i -eq 5 ]; then
+                echo "Failed to verify backend health."
+                exit 1
+              fi
+            done
+            
+            echo "Verifying ECS services..."
+            # Check backend service
+            aws ecs describe-services --cluster $ECS_CLUSTER --services $ECS_BACKEND_SERVICE --region $REGION
+            
+            # Check frontend service
+            aws ecs describe-services --cluster $ECS_FRONTEND_CLUSTER --services $ECS_FRONTEND_SERVICE --region $REGION
+            
+            echo "Deployment verification complete!"
