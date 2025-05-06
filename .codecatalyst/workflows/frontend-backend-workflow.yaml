@@ -56,8 +56,6 @@ Actions:
           Value: us-east-1
         - Name: ACCOUNT_ID
           Value: 727646504965
-        # - Name: BACKEND_IMAGE_TAG
-        #   From: BuildBackendImage
     Environment:
         Name: dev
         Connections:
@@ -70,10 +68,14 @@ Actions:
       capabilities: CAPABILITY_IAM, CAPABILITY_NAMED_IAM, CAPABILITY_AUTO_EXPAND
       # RoleArn: arn:aws:iam::$ACCOUNT_ID:role/CodeCatalystWorkflowDevelopmentRole-us-east-1
       parameter-overrides: |
-        {
-          "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$BuildBackendImage.BACKEND_REPO_NAME",
-          "ContainerImage": "$BuildBackendImage.BACKEND_IMAGE_TAG"
-        }
+        VpcId=vpc-0e9988863d4f4c11b,
+        PublicSubnet1=subnet-02ae40e988bb1c79c,
+        PublicSubnet2=subnet-0e7baca72e0702301,
+        PrivateSubnet1=subnet-02ae40e988bb1c79c,
+        PrivateSubnet2=subnet-0e7baca72e0702301,
+        OpenAIApiKey=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,
+        ECRRepositoryURI=727646504965.dkr.ecr.us-east-1.amazonaws.com/$BuildBackendImage.BACKEND_REPO_NAME,
+        ContainerImage=latest
     Outputs:
       Variables:
         - BACKEND_URL
@@ -143,11 +145,12 @@ Actions:
       capabilities: CAPABILITY_IAM, CAPABILITY_NAMED_IAM, CAPABILITY_AUTO_EXPAND
       # RoleArn: arn:aws:iam::$ACCOUNT_ID:role/CodeCatalystWorkflowDevelopmentRole-us-east-1
       parameter-overrides: |
-        {
-          "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$BuildFrontendImage.FRONTEND_REPO_NAME",
-          "ContainerImage": "$BuildFrontendImage.FRONTEND_IMAGE_TAG",
-          "BackendURL": "$DeployBackendCloudFormation.BACKEND_URL"
-        }
+        ParameterKey=VpcId,ParameterValue=vpc-0e9988863d4f4c11b \
+        ParameterKey=PublicSubnet1,ParameterValue=subnet-02ae40e988bb1c79c \
+        ParameterKey=PublicSubnet2,ParameterValue=subnet-0e7baca72e0702301 \
+        ParameterKey=ECRRepositoryURI,ParameterValue=727646504965.dkr.ecr.us-east-1.amazonaws.com/foodbank-frontend-v2 \
+        ParameterKey=ContainerImage,ParameterValue=latest \
+        ParameterKey=BackendURL,ParameterValue= $DeployBackendCloudFormation.BACKEND_URL
 
   # ========== Verification ==========
   # VerifyDeployment:
