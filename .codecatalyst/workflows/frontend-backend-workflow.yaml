@@ -20,6 +20,9 @@ Actions:
           Value: us-east-1
         - Name: ACCOUNT_ID
           Value: 727646504965
+        - Name: BACKEND_REPO_NAME
+          Value: foodbank-backend-v2
+
     Environment:
       Name: dev
       Connections:
@@ -30,12 +33,13 @@ Actions:
         - Run: |
             cd backend
             aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
-            docker build -t $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$foodbank-backend-v2:latest .
-            docker push $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$foodbank-backend-v2:latest
-            echo "::set-output name=IMAGE_TAG::latest"
+            docker build -t $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$BACKEND_REPO_NAME:latest .
+            docker push $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$BACKEND_REPO_NAME:latest
+            echo "::set-output name=BACKEND_IMAGE_TAG::latest"
     Outputs:
       Variables:
         - BACKEND_IMAGE_TAG
+        - BACKEND_REPO_NAME
       AutoDiscoverReports:
         Enabled: true
         ReportNamePrefix: rptBuildBackend
@@ -65,11 +69,11 @@ Actions:
       template: backend-template.yaml
       capabilities: CAPABILITY_IAM, CAPABILITY_NAMED_IAM, CAPABILITY_AUTO_EXPAND
       # RoleArn: arn:aws:iam::$ACCOUNT_ID:role/CodeCatalystWorkflowDevelopmentRole-us-east-1
-      # ParameterOverrides: |
-      #   {
-      #     "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$foodbank-backend-v2",
-      #     "ContainerImage": "$BACKEND_IMAGE_TAG"
-      #   }
+      ParameterOverrides: |
+        {
+          "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$foodbank-backend-v2",
+          "ContainerImage": "$BACKEND_IMAGE_TAG"
+        }
     Outputs:
       Variables:
         - BACKEND_URL
@@ -85,6 +89,8 @@ Actions:
           Value: us-east-1
         - Name: ACCOUNT_ID
           Value: 727646504965
+        - Name: FRONTEND_REPO_NAME
+          Value: foodbank-frontend-v2
     Environment:
       Name: dev
       Connections:
@@ -95,15 +101,16 @@ Actions:
         - Run: |
             cd frontend
             aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
-            docker build -t $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$oodbank-frontend-v2:latest .
-            docker push $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$oodbank-frontend-v2:latest
-            echo "::set-output name=IMAGE_TAG::latest"
+            docker build -t $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_REPO_NAME:latest .
+            docker push $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_REPO_NAME:latest
+            echo "::set-output name=FRONTEND_IMAGE_TAG::latest"
     Outputs:
       AutoDiscoverReports:
         Enabled: true
         ReportNamePrefix: rptBuildFrontend
       Variables:
         - FRONTEND_IMAGE_TAG
+        - FRONTEND_REPO_NAME
 
   DeployFrontendCloudFormation:
     Identifier: aws/cfn-deploy@v1
@@ -133,12 +140,12 @@ Actions:
       template: frontend-template-fixed.yaml
       capabilities: CAPABILITY_IAM, CAPABILITY_NAMED_IAM, CAPABILITY_AUTO_EXPAND
       # RoleArn: arn:aws:iam::$ACCOUNT_ID:role/CodeCatalystWorkflowDevelopmentRole-us-east-1
-      # ParameterOverrides: |
-      #   {
-      #     "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$oodbank-frontend-v2",
-      #     "ContainerImage": "$FRONTEND_IMAGE_TAG",
-      #     "BackendURL": "$BACKEND_URL"
-      #   }
+      ParameterOverrides: |
+        {
+          "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_REPO_NAME",
+          "ContainerImage": "$FRONTEND_IMAGE_TAG",
+          "BackendURL": "$BACKEND_URL"
+        }
 
   # ========== Verification ==========
   # VerifyDeployment:
