@@ -83,6 +83,14 @@ def food_llm(input_sentence: str) -> dict:
                 if row['Region'] == llm1_output['region'] and row['Zone'].replace(" ", "") == llm1_output['county'].replace(" ", ""):
                     filtered_df.append(row)
 
+
+
+        #filtered_df = connect_to_postgres(db_host, db_name, db_user, db_password, db_port, llm1_output)
+
+
+
+
+
         if not filtered_df:
             logger.warning("No matching records found in dataset.")
             return {"error": "No matching records found in the dataset"}
