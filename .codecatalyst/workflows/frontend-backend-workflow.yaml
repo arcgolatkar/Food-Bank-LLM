@@ -52,8 +52,8 @@ Actions:
           Value: us-east-1
         - Name: ACCOUNT_ID
           Value: 727646504965
-        - Name: BACKEND_IMAGE_TAG
-          From: BuildBackendImage
+        # - Name: BACKEND_IMAGE_TAG
+        #   From: BuildBackendImage
     Environment:
         Name: dev
         Connections:
@@ -118,10 +118,10 @@ Actions:
           Value: us-east-1
         - Name: ACCOUNT_ID
           Value: 727646504965
-        - Name: FRONTEND_IMAGE_TAG
-          From: BuildFrontendImage
-        - Name: BACKEND_URL
-          From: DeployBackendCloudFormation
+        # - Name: FRONTEND_IMAGE_TAG
+        #   From: BuildFrontendImage
+        # - Name: BACKEND_URL
+        #   From: DeployBackendCloudFormation
     Environment:
       Name: dev
       Connections:
