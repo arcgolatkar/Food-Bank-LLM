@@ -47,7 +47,6 @@ def food_llm(input_sentence: str) -> dict:
     try:
         llm1_response = get_completion(prompt=extractor_llm_prompt(input_sentence),key=os.getenv('OPENAI_API_KEY'))
         llm1_raw_output = llm1_response.choices[0].message.content
-
         logger.info(f"LLM1 raw output: {llm1_raw_output}")
 
         try:
