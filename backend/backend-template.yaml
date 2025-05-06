@@ -75,7 +75,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     Properties:
-      LogGroupName: /ecs/foodbank-backend
+      LogGroupName: /ecs/foodbank-backend-v2
       RetentionInDays: 30
 
   # ECS Task Execution Role
