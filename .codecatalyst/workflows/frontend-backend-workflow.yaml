@@ -65,7 +65,7 @@ Actions:
             Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
     Configuration:
       region: $REGION
-      name: $foodbank-backend-v10
+      name: food_backend_stack
       template: backend/backend-template.yaml
       capabilities: CAPABILITY_IAM, CAPABILITY_NAMED_IAM, CAPABILITY_AUTO_EXPAND
       # RoleArn: arn:aws:iam::$ACCOUNT_ID:role/CodeCatalystWorkflowDevelopmentRole-us-east-1
@@ -125,6 +125,8 @@ Actions:
           Value: us-east-1
         - Name: ACCOUNT_ID
           Value: 727646504965
+        - Name: FRONTEND_REPO_NAME
+          Value: foodbank-frontend-v2
         # - Name: FRONTEND_IMAGE_TAG
         #   From: BuildFrontendImage
         # - Name: BACKEND_URL
@@ -136,7 +138,7 @@ Actions:
           Role: CodeCatalystWorkflowDevelopmentRole-foodBank605
     Configuration:
       region: $REGION
-      name: $foodbank-frontend-v10
+      name: food-frontend_stack
       template: frontend/frontend-template.yaml
       capabilities: CAPABILITY_IAM, CAPABILITY_NAMED_IAM, CAPABILITY_AUTO_EXPAND
       # RoleArn: arn:aws:iam::$ACCOUNT_ID:role/CodeCatalystWorkflowDevelopmentRole-us-east-1
