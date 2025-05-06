@@ -69,7 +69,7 @@ Actions:
       template: backend-template.yaml
       capabilities: CAPABILITY_IAM, CAPABILITY_NAMED_IAM, CAPABILITY_AUTO_EXPAND
       # RoleArn: arn:aws:iam::$ACCOUNT_ID:role/CodeCatalystWorkflowDevelopmentRole-us-east-1
-      ParameterOverrides: |
+      parameter-overrides: |
         {
           "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$foodbank-backend-v2",
           "ContainerImage": "$BACKEND_IMAGE_TAG"
@@ -140,7 +140,7 @@ Actions:
       template: frontend-template-fixed.yaml
       capabilities: CAPABILITY_IAM, CAPABILITY_NAMED_IAM, CAPABILITY_AUTO_EXPAND
       # RoleArn: arn:aws:iam::$ACCOUNT_ID:role/CodeCatalystWorkflowDevelopmentRole-us-east-1
-      ParameterOverrides: |
+      parameter-overrides: |
         {
           "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_REPO_NAME",
           "ContainerImage": "$FRONTEND_IMAGE_TAG",
