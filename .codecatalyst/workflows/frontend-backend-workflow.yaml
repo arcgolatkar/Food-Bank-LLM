@@ -7,19 +7,6 @@ Triggers:
     Branches:
       - cfn
 
-# Define environment variables for the workflow
-Variables:
-  ACCOUNT_ID: 727646504965
-  REGION: us-east-1
-  BACKEND_ECR_REPO: foodbank-backend-v2
-  FRONTEND_ECR_REPO: foodbank-frontend-v2
-  BACKEND_STACK_NAME: foodbank-backend-v10
-  FRONTEND_STACK_NAME: foodbank-frontend-v10
-  ECS_BACKEND_SERVICE: foodbank-backend-v10
-  ECS_FRONTEND_SERVICE: foodbank-frontend-v10
-  ECS_CLUSTER: FoodBankCluster
-  ECS_FRONTEND_CLUSTER: FoodBankFrontendCluster
-
 # Define the workflow actions
 Actions:
   # ========== Backend Build & Deploy ==========
@@ -28,6 +15,11 @@ Actions:
     Inputs:
       Sources:
         - WorkflowSource
+      Variables:
+        - Name: REGION
+          Value: us-east-1
+        - Name: ACCOUNT_ID
+          Value: 727646504965
     Environment:
       Name: aws/managed
       Type: LINUX_CONTAINER
@@ -36,8 +28,8 @@ Actions:
         - Run: |
             cd backend
             aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
-            docker build -t $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$BACKEND_ECR_REPO:latest .
-            docker push $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$BACKEND_ECR_REPO:latest
+            docker build -t $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$foodbank-backend-v2:latest .
+            docker push $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$foodbank-backend-v2:latest
             echo "::set-output name=IMAGE_TAG::latest"
     Outputs:
       Variables:
@@ -52,6 +44,10 @@ Actions:
       Sources:
         - WorkflowSource
       Variables:
+        - Name: REGION
+          Value: us-east-1
+        - Name: ACCOUNT_ID
+          Value: 727646504965
         - Name: BACKEND_IMAGE_TAG
           From: BuildBackendImage
     Environment:
@@ -62,14 +58,14 @@ Actions:
           Role: CodeCatalystWorkflowDevelopmentRole-us-east-1
     Configuration:
       Region: $REGION
-      StackName: $BACKEND_STACK_NAME
+      StackName: $foodbank-backend-v10
       TemplatePath: backend-template.yaml
       TemplateConfigurationPath: backend-parameters.json
       Capabilities: CAPABILITY_IAM
       RoleArn: arn:aws:iam::$ACCOUNT_ID:role/CodeCatalystWorkflowDevelopmentRole-us-east-1
       ParameterOverrides: |
         {
-          "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$BACKEND_ECR_REPO",
+          "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$foodbank-backend-v2",
           "ContainerImage": "$BACKEND_IMAGE_TAG"
         }
     Outputs:
@@ -83,6 +79,11 @@ Actions:
     Inputs:
       Sources:
         - WorkflowSource
+      Variables:
+        - Name: REGION
+          Value: us-east-1
+        - Name: ACCOUNT_ID
+          Value: 727646504965
     Environment:
       Name: aws/managed
       Type: LINUX_CONTAINER
@@ -91,8 +92,8 @@ Actions:
         - Run: |
             cd frontend
             aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
-            docker build -t $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_ECR_REPO:latest .
-            docker push $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_ECR_REPO:latest
+            docker build -t $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$oodbank-frontend-v2:latest .
+            docker push $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$oodbank-frontend-v2:latest
             echo "::set-output name=IMAGE_TAG::latest"
     Outputs:
       Variables:
@@ -108,6 +109,10 @@ Actions:
       Sources:
         - WorkflowSource
       Variables:
+        - Name: REGION
+          Value: us-east-1
+        - Name: ACCOUNT_ID
+          Value: 727646504965
         - Name: FRONTEND_IMAGE_TAG
           From: BuildFrontendImage
         - Name: BACKEND_URL
@@ -120,14 +125,14 @@ Actions:
           Role: CodeCatalystWorkflowDevelopmentRole-us-east-1
     Configuration:
       Region: $REGION
-      StackName: $FRONTEND_STACK_NAME
+      StackName: $foodbank-frontend-v10
       TemplatePath: frontend-template-fixed.yaml
       TemplateConfigurationPath: frontend-parameters.json
       Capabilities: CAPABILITY_IAM
       RoleArn: arn:aws:iam::$ACCOUNT_ID:role/CodeCatalystWorkflowDevelopmentRole-us-east-1
       ParameterOverrides: |
         {
-          "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$FRONTEND_ECR_REPO",
+          "ECRRepositoryURI": "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$oodbank-frontend-v2",
           "ContainerImage": "$FRONTEND_IMAGE_TAG",
           "BackendURL": "$BACKEND_URL"
         }
@@ -141,6 +146,10 @@ Actions:
       Sources:
         - WorkflowSource
       Variables:
+        - Name: REGION
+          Value: us-east-1
+        - Name: ACCOUNT_ID
+          Value: 727646504965
         - Name: BACKEND_URL
           From: DeployBackendCloudFormation
     Environment:
@@ -171,9 +180,9 @@ Actions:
             
             echo "Verifying ECS services..."
             # Check backend service
-            aws ecs describe-services --cluster $ECS_CLUSTER --services $ECS_BACKEND_SERVICE --region $REGION
+            aws ecs describe-services --cluster $FoodBankCluster --services $foodbank-backend-v10 --region $REGION
             
             # Check frontend service
-            aws ecs describe-services --cluster $ECS_FRONTEND_CLUSTER --services $ECS_FRONTEND_SERVICE --region $REGION
+            aws ecs describe-services --cluster $FoodBankFrontendCluster --services $foodbank-frontend-v10 --region $REGION
             
             echo "Deployment verification complete!"
