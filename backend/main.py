@@ -39,6 +39,10 @@ import json
 def food_llm(input_sentence: str) -> dict:
     logger.info(f"Processing input: {input_sentence}")
 
+
+
+
+
     # Step 1: Feature Extraction (LLM1)
     try:
         llm1_response = get_completion(prompt=extractor_llm_prompt(input_sentence),key=os.getenv('OPENAI_API_KEY'))
@@ -63,6 +67,12 @@ def food_llm(input_sentence: str) -> dict:
     except Exception as e:
         logger.error(f"Error during feature extraction: {str(e)}")
         return {"error": "Feature extraction failed", "details": str(e)}
+
+
+
+
+
+
 
     # Step 2: Filter Data from CSV
     try:
@@ -89,6 +99,11 @@ def food_llm(input_sentence: str) -> dict:
         logger.error(f"Error during SQL generation: {str(e)}")
         return {"error": "SQL generation failed", "details": str(e)}
 
+
+
+
+
+
     # Step 3: Geocoding
     try:
         lat, lon = lat_lon_finder(llm1_output['geo_address'])
@@ -101,6 +116,12 @@ def food_llm(input_sentence: str) -> dict:
     except Exception as e:
         logger.error(f"Error during geocoding: {str(e)}")
         return {"error": "Geocoding failed", "details": str(e)}
+
+
+
+
+
+
 
     # Step 4: Distance Calculation
     try:
@@ -117,6 +138,13 @@ def food_llm(input_sentence: str) -> dict:
         logger.error(f"Error during distance calculation: {str(e)}")
         return {"error": "Distance calculation failed", "details": str(e)}
 
+
+
+
+
+
+
+
     # Step 5: Summary using LLM2
     try:
         llm2_response = get_completion(prompt=summary_llm_prompt(input_sentence, llm1_output, nearest_neighbours), model="gpt-4.1",key=os.getenv('OPENAI_API_KEY'))
@@ -128,6 +156,12 @@ def food_llm(input_sentence: str) -> dict:
         logger.error(f"Error during summary generation: {str(e)}")
         return {"error": "Summary generation failed", "details": str(e)}
 
+
+
+
+
+
+
     # Step 6: Return Successful Output
     return {
         "feature_extractor_llm_output": llm1_output,
@@ -136,6 +170,13 @@ def food_llm(input_sentence: str) -> dict:
         "summary_llm_output": llm2_summary,
         "status": "success"
     }
+
+
+
+
+
+
+
 
 # =================== API Routes ===================
 
